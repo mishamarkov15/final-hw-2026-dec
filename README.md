@@ -48,7 +48,7 @@ CSV имеет заголовок `amount,category,description,date`; [прим�
 
 ## Google Таблицы
 
-Подготовлен [шаблон с примерами](https://docs.google.com/spreadsheets/d/1phOEnPeuEYU7haWg5uDyHpyq7hEQeJ2xCffdrlN5qzQ/edit). При работе из другого аккаунта создайте собственную таблицу по инструкции ниже.
+Доступен [пример Google Таблицы с подключённым скриптом и отчётом](https://docs.google.com/spreadsheets/d/1phOEnPeuEYU7haWg5uDyHpyq7hEQeJ2xCffdrlN5qzQ/edit). Проверенный сценарий: бюджет 5000 ₽, расход 450 ₽, отчёт 9%; превышение лимита отклонено. Для своих данных сделайте копию и зарегистрируйтесь через меню CashCraft.
 
 Скрипт, настройка меню, отправка по флажку и пример работы — в [google-sheets](google-sheets/README.md). Google нужен публичный HTTPS-адрес API. Для временной демонстрации при запущенном Compose:
 
@@ -56,7 +56,7 @@ CSV имеет заголовок `amount,category,description,date`; [прим�
 ssh -R 80:localhost:8080 nokey@localhost.run
 ```
 
-Укажите выданный HTTPS-адрес в меню таблицы **CashCraft → Адрес API**. Туннель действует, пока открыто SSH-соединение; адрес может измениться при переподключении ([документация](https://localhost.run/docs/)). Для постоянной работы разверните Compose на сервере с HTTPS. Альтернативный туннель: `docker compose --profile public up -d tunnel`, адрес — в `docker compose logs tunnel`.
+Укажите выданный HTTPS-адрес в меню таблицы **CashCraft → Адрес API**. Туннель действует, пока открыто SSH-соединение; бесплатный адрес может периодически меняться, следите за выводом SSH ([документация](https://localhost.run/docs/)). Для постоянной работы разверните Compose на сервере с HTTPS. Альтернативный туннель: `docker compose --profile public up -d tunnel`, адрес — в `docker compose logs tunnel`.
 
 ## Проверка
 
@@ -69,4 +69,4 @@ node --test google-sheets/tests/code.test.cjs
 python3 scripts/smoke.py
 ```
 
-Последняя команда проверяет запущенный API и создаёт отдельные тестовые аккаунты. Для другого адреса: `python3 scripts/smoke.py --base-url https://ваш-адрес`. PostgreSQL-тесты включаются через `TEST_DATABASE_URL` и используют временные схемы. [cover.out](cover.out) — результат тестового покрытия.
+Последняя команда проверяет запущенный API и создаёт отдельные тестовые аккаунты. Для другого адреса: `python3 scripts/smoke.py --base-url https://ваш-адрес`. У публичного туннеля можно добавить `--skip-large-bodies`, чтобы пропустить загрузки более 2/10 МиБ; локально они проверяются без этого флага. PostgreSQL-тесты включаются через `TEST_DATABASE_URL` и используют временные схемы. [cover.out](cover.out) — результат тестового покрытия.
