@@ -1,0 +1,130 @@
+name: cashcraft
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-cashcraft}:${POSTGRES_PASSWORD:?Run scripts/init-env.sh}@postgres:5432/${POSTGRES_DB:-cashcraft}?sslmode=disable
+  JWT_SECRET: ${JWT_SECRET:?Run scripts/init-env.sh}
+  JWT_TTL: ${JWT_TTL:-1h}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cashcraft}
+      POSTGRES_USER: ${POSTGRES_USER:-cashcraft}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run scripts/init-env.sh}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run scripts/init-env.sh}
+    command: ["sh", "-c", "exec redis-server --save '' --appendonly no --requirepass \"$$REDIS_PASSWORD\""]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  migrate:
+    build:
+      context: .
+      args:
+        TARGET: ./cmd/migrate
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  auth:
+    build:
+      context: .
+      args:
+        TARGET: ./services/auth/cmd
+    environment:
+      <<: *app-env
+      GRPC_ADDR: :50052
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "tcp", "localhost:50052"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  ledger:
+    build:
+      context: .
+      args:
+        TARGET: ./services/ledger/cmd
+    environment:
+      <<: *app-env
+      GRPC_ADDR: :50051
+      REDIS_ADDR: redis:6379
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run scripts/init-env.sh}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "tcp", "localhost:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  gateway:
+    build:
+      context: .
+      args:
+        TARGET: ./services/gateway/cmd
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Run scripts/init-env.sh}
+      JWT_TTL: ${JWT_TTL:-1h}
+      LEDGER_ADDR: ledger:50051
+      AUTH_ADDR: auth:50052
+      HTTP_ADDR: :8080
+      OPENAPI_PATH: /app/docs/openapi.yaml
+    ports:
+      - "127.0.0.1:${PORT:-8080}:8080"
+    depends_on:
+      auth:
+        condition: service_healthy
+      ledger:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/healthcheck", "http", "http://localhost:8080/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend, frontend]
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: [public]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://gateway:8080", "--protocol", "http2"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks: [frontend]
+
+volumes:
+  postgres-data:
+
+networks:
+  backend:
+    internal: true
+  frontend:

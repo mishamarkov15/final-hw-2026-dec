@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+.tools
+bin
+node_modules
+cover.out
+coverage.html
+*.log

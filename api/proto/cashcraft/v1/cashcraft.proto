@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package cashcraft.v1;
+option go_package = "github.com/mishamarkov15/final-hw-2026-dec/api/gen/v1;cashcraftv1";
+
+message Empty {}
+message User { int64 id = 1; string email = 2; }
+message Credentials { string email = 1; string password = 2; }
+message AuthResponse { string access_token = 1; int64 expires_at = 2; User user = 3; }
+service AuthService {
+  rpc Register(Credentials) returns (AuthResponse);
+  rpc Login(Credentials) returns (AuthResponse);
+}
+
+message Budget { string category = 1; double limit = 2; }
+message BudgetsResponse { repeated Budget budgets = 1; }
+message Transaction {
+  int64 id = 1;
+  double amount = 2;
+  string category = 3;
+  string description = 4;
+  string date = 5;
+}
+message TransactionsResponse { repeated Transaction transactions = 1; }
+message ReportRequest { string from = 1; string to = 2; }
+message CategoryTotal {
+  string category = 1;
+  double total = 2;
+  bool has_budget = 3;
+  double budget_limit = 4;
+  double budget_used_percent = 5;
+}
+message ReportResponse {
+  string from = 1;
+  string to = 2;
+  double total = 3;
+  repeated CategoryTotal categories = 4;
+}
+message ImportRequest { string csv = 1; }
+message BulkRequest { repeated Transaction transactions = 1; }
+message ImportError { int32 row = 1; string message = 2; }
+message ImportResponse { int32 total = 1; int32 created = 2; repeated ImportError errors = 3; }
+message ExportResponse { bytes data = 1; }
+service LedgerService {
+  rpc SetBudget(Budget) returns (Budget);
+  rpc ListBudgets(Empty) returns (BudgetsResponse);
+  rpc AddTransaction(Transaction) returns (Transaction);
+  rpc ListTransactions(Empty) returns (TransactionsResponse);
+  rpc GetReportSummary(ReportRequest) returns (ReportResponse);
+  rpc ImportTransactions(ImportRequest) returns (ImportResponse);
+  rpc BulkTransactions(BulkRequest) returns (ImportResponse);
+  rpc ExportTransactions(Empty) returns (ExportResponse);
+}

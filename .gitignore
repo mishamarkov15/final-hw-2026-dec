@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+.tools/
+.DS_Store
+bin/
+coverage.html
+*.log
+.clasp.json
+node_modules/
