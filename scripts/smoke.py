@@ -6,6 +6,7 @@ import base64
 from concurrent.futures import ThreadPoolExecutor
 import csv
 from decimal import Decimal
+import http.client
 import io
 import json
 import os
@@ -66,7 +67,7 @@ def money(value):
     return Decimal(str(value))
 
 
-def run(base_url):
+def run(base_url, skip_large_bodies=False):
     api = API(base_url)
     run_id = uuid.uuid4().hex
     password = secrets.token_urlsafe(24)
@@ -253,11 +254,14 @@ def run(base_url):
     post("/api/transactions/bulk", {"transactions": too_many}, token_a, expected=400)
     csv_too_many = "amount,category,description,date\n" + "1,over-limit,,2026-01-01\n" * 1001
     api.request("POST", "/api/transactions/import", csv_too_many, token_a, expected=400, content_type="text/csv")
-    api.request("POST", "/api/budgets", '{"category":"' + "x" * (2 << 20) + '"}', token_a, expected=413)
-    api.request("POST", "/api/transactions/import", "x" * ((10 << 20) + 1), token_a,
-                expected=413, content_type="text/csv")
+    if not skip_large_bodies:
+        api.request("POST", "/api/budgets", '{"category":"' + "x" * (2 << 20) + '"}', token_a, expected=413)
+        api.request("POST", "/api/transactions/import", "x" * ((10 << 20) + 1), token_a,
+                    expected=413, content_type="text/csv")
     check(len(get("/api/transactions", token_a)) == count_before_limits, "oversized imports do not persist")
-    ok("JSON/CSV size limits and 1000-row import limits")
+    ok("1000-row import limits" if skip_large_bodies else "JSON/CSV size limits and 1000-row import limits")
+    if skip_large_bodies:
+        print("SKIP oversized-body uploads; run without --skip-large-bodies against the local stack.")
 
     print(f"All {passed} smoke scenarios passed. Two isolated test accounts were created.")
 
@@ -265,10 +269,12 @@ def run(base_url):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default=os.environ.get("CASHCRAFT_BASE_URL", "http://127.0.0.1:8080"))
+    parser.add_argument("--skip-large-bodies", action="store_true",
+                        help="skip oversized 2/10 MiB uploads when checking a bandwidth-limited public tunnel")
     args = parser.parse_args()
     try:
-        run(args.base_url)
-    except (CheckFailure, urllib.error.URLError, TimeoutError, KeyError, TypeError) as error:
+        run(args.base_url, args.skip_large_bodies)
+    except (CheckFailure, urllib.error.URLError, http.client.HTTPException, OSError, KeyError, TypeError) as error:
         print(f"FAIL {error}", file=sys.stderr)
         return 1
     return 0
